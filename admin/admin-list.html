@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>后台管理 - 提交列表</title>
+    <link rel="stylesheet" href="admin-style.css" />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    />
+  </head>
+  <body>
+    <div class="admin-container">
+      <div class="header">
+        <h1><i class="fas fa-tachometer-alt"></i> 提交数据管理</h1>
+        <button class="logout-btn" id="logoutBtn">
+          <i class="fas fa-sign-out-alt"></i> 退出登录
+        </button>
+      </div>
+
+      <div class="filter-area">
+        <div class="filter-group">
+          <div class="filter-item">
+            <label for="startDate">开始日期</label>
+            <input type="date" id="startDate" />
+          </div>
+
+          <div class="filter-item">
+            <label for="endDate">结束日期</label>
+            <input type="date" id="endDate" />
+          </div>
+
+          <button class="filter-btn" id="filterBtn">
+            <i class="fas fa-filter"></i> 筛选
+          </button>
+
+          <button class="reset-btn" id="resetBtn">
+            <i class="fas fa-redo"></i> 重置
+          </button>
+        </div>
+      </div>
+
+      <div class="table-container">
+        <div class="table-responsive">
+          <table id="submissionsTable">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>姓名</th>
+                <th>手机号</th>
+                <th>IP地址</th>
+                <th>操作系统</th>
+                <th>浏览器</th>
+                <th>提交时间</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="tableBody">
+              <!-- 数据将通过JS动态加载 -->
+            </tbody>
+          </table>
+          <div id="loading" class="loading">
+            <i class="fas fa-spinner fa-spin"></i> 加载中...
+          </div>
+          <div id="noData" class="no-data" style="display: none">暂无数据</div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // 列表页JS
+      document.addEventListener("DOMContentLoaded", function () {
+        const logoutBtn = document.getElementById("logoutBtn");
+        const filterBtn = document.getElementById("filterBtn");
+        const resetBtn = document.getElementById("resetBtn");
+        const startDate = document.getElementById("startDate");
+        const endDate = document.getElementById("endDate");
+        const tableBody = document.getElementById("tableBody");
+        const loading = document.getElementById("loading");
+        const noData = document.getElementById("noData");
+
+        // 设置默认日期（最近30天）
+        const today = new Date();
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(today.getDate() - 30);
+
+        endDate.value = today.toISOString().split("T")[0];
+        startDate.value = thirtyDaysAgo.toISOString().split("T")[0];
+
+        // 加载数据
+        loadSubmissions();
+
+        // 退出登录
+        logoutBtn.addEventListener("click", async () => {
+          await fetch("/api/logout", {
+            method: "POST",
+            credentials: "include",
+          });
+          window.location.href = "/admin";
+        });
+
+        // 筛选数据
+        filterBtn.addEventListener("click", function () {
+          loadSubmissions();
+        });
+
+        // 重置筛选
+        resetBtn.addEventListener("click", function () {
+          startDate.value = "";
+          endDate.value = "";
+          loadSubmissions();
+        });
+
+        // 加载提交数据
+        async function loadSubmissions() {
+          loading.style.display = "block";
+          noData.style.display = "none";
+          tableBody.innerHTML = "";
+
+          try {
+            // 构建查询参数
+            const params = new URLSearchParams();
+            if (startDate.value) params.append("startDate", startDate.value);
+            if (endDate.value) params.append("endDate", endDate.value);
+
+            const response = await fetch(`/api/list?${params.toString()}`, {
+              credentials: "include",
+            });
+            if (response.status === 401) {
+              alert("登录已过期，请重新登录");
+              window.location.href = "/admin";
+              return;
+            }
+            const result = await response.json();
+
+            loading.style.display = "none";
+
+            if (result.success && result.data.length > 0) {
+              renderTable(result.data);
+            } else {
+              noData.style.display = "block";
+            }
+          } catch (error) {
+            console.error("加载数据失败:", error);
+            loading.style.display = "none";
+            noData.style.display = "block";
+            noData.textContent = "加载失败，请刷新页面重试";
+          }
+        }
+
+        // 渲染表格数据
+        // 渲染表格数据
+        function renderTable(data) {
+          tableBody.innerHTML = "";
+
+          data.forEach((item) => {
+            const row = document.createElement("tr");
+
+            // 格式化时间
+            const submitTime = new Date(item.timestamp); // 使用 item.timestamp 进行格式化
+            const formattedTime = submitTime.toLocaleString("zh-CN", {
+              year: "numeric",
+              month: "2-digit",
+              day: "2-digit",
+              hour: "2-digit",
+              minute: "2-digit",
+              second: "2-digit",
+            });
+
+            row.innerHTML = `
+      <td>${item.id}</td>
+      <td>${escapeHtml(item.name)}</td>
+      <td>${escapeHtml(item.phone)}</td>
+      <td>${escapeHtml(item.ip || "未知")}</td>
+      <td>${escapeHtml(item.system || "未知")}</td>
+      <td>${escapeHtml(item.userAgent || "未知")}</td>
+      <td>${formattedTime}</td>  <!-- 渲染格式化后的时间 -->
+      <td>
+        <button class="delete-btn" data-id="${item.id}">
+          <i class="fas fa-trash"></i> 删除
+        </button>
+      </td>
+    `;
+
+            tableBody.appendChild(row);
+          });
+
+          // 绑定删除按钮事件
+          document.querySelectorAll(".delete-btn").forEach((btn) => {
+            btn.addEventListener("click", async function () {
+              const id = this.getAttribute("data-id");
+
+              if (confirm("确定要删除这条记录吗？")) {
+                try {
+                  const response = await fetch(`/api/list/${id}`, {
+                    method: "DELETE",
+                    credentials: "include",
+                  });
+                  if (response.status === 401) {
+                    alert("登录已过期，请重新登录");
+                    window.location.href = "/admin";
+                    return;
+                  }
+                  const result = await response.json();
+
+                  if (result.success) {
+                    alert("删除成功！");
+                    loadSubmissions(); // 重新加载数据
+                  } else {
+                    alert("删除失败：" + result.message);
+                  }
+                } catch (error) {
+                  console.error("删除失败:", error);
+                  alert("删除失败，请重试");
+                }
+              }
+            });
+          });
+        }
+
+        // 防止XSS攻击
+        function escapeHtml(text) {
+          const div = document.createElement("div");
+          div.textContent = text;
+          return div.innerHTML;
+        }
+      });
+    </script>
+  </body>
+</html>

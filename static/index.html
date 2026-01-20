@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="zh">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0"
+    />
+
+    <title>在线预约</title>
+    <link rel="stylesheet" href="index.css" />
+  </head>
+
+  <body>
+    <!-- 背景 -->
+    <div class="background-container">
+      <div class="background bg1"></div>
+      <div class="background bg2"></div>
+    </div>
+
+    <div class="contain">
+      <form class="form-container" id="bookingForm">
+        <h2>在线预约</h2>
+
+        <!-- 姓名 -->
+        <div class="form-group">
+          <div class="form-item" id="nameItem">
+            <span class="label">您的姓名<span class="required">*</span></span>
+            <input type="text" id="name" placeholder="请输入您的姓名" />
+          </div>
+          <div class="error-text" id="nameError" style="display: none">
+            姓名不能为空！
+          </div>
+        </div>
+
+        <!-- 手机号 -->
+        <div class="form-group">
+          <div class="form-item" id="phoneItem">
+            <span class="label">手机号<span class="required">*</span></span>
+            <input type="tel" id="phone" placeholder="请输入您的手机号码" />
+          </div>
+          <div class="error-text" id="phoneError" style="display: none">
+            请输入正确的手机号！
+          </div>
+        </div>
+
+        <button type="submit" id="submitBtn">提交预约</button>
+      </form>
+
+      <div class="qr-image"></div>
+    </div>
+
+    <!-- 成功弹窗 -->
+    <div id="successModal" class="modal">
+      <div class="success-box">
+        <!-- 成功图标 -->
+        <div class="success-icon"></div>
+
+        <!-- 成功标题（切图） -->
+        <div class="success-title"></div>
+
+        <!-- 描述文字 -->
+        <div class="success-desc">我们稍后电话联系您！</div>
+
+        <!-- 按钮 -->
+        <button class="success-btn" id="modalCloseButton">我知道了</button>
+      </div>
+    </div>
+
+    <script>
+      /* ========= 背景切换（原逻辑保留） ========= */
+      /* ========= 背景始终向左滑动 ========= */
+      const bg1 = document.querySelector(".background.bg1");
+      const bg2 = document.querySelector(".background.bg2");
+
+      let current = bg1;
+      let next = bg2;
+
+      // 初始化位置
+      current.style.transform = "translateX(0)";
+      current.style.opacity = "1";
+
+      next.style.transform = "translateX(100%)";
+      next.style.opacity = "1";
+
+      setInterval(() => {
+        // 当前图向左滑出
+        current.style.transform = "translateX(-100%)";
+
+        // 下一张从右侧滑入
+        next.style.transform = "translateX(0)";
+
+        // 动画结束后交换角色
+        setTimeout(() => {
+          // 把滑出的图放回右侧，作为下一次的 next
+          current.style.transition = "none";
+          current.style.transform = "translateX(100%)";
+
+          // 强制回流，防止 transition 失效
+          current.offsetHeight;
+
+          current.style.transition =
+            "transform 1s ease-in-out, opacity 1s ease-in-out";
+
+          // 交换 current / next
+          const temp = current;
+          current = next;
+          next = temp;
+        }, 1000);
+      }, 5000);
+
+      /* ========= 表单逻辑 ========= */
+      const form = document.getElementById("bookingForm");
+      const nameInput = document.getElementById("name");
+      const phoneInput = document.getElementById("phone");
+      const submitBtn = document.getElementById("submitBtn");
+
+      const nameItem = document.getElementById("nameItem");
+      const phoneItem = document.getElementById("phoneItem");
+      const nameError = document.getElementById("nameError");
+      const phoneError = document.getElementById("phoneError");
+
+      const phoneReg = /^1[3-9]\d{9}$/;
+
+      /* 按钮颜色控制 */
+
+      function updateButtonState() {
+        const nameValid = nameInput.value.trim() !== "";
+        const phoneValid = phoneReg.test(phoneInput.value.trim());
+
+        if (nameValid && phoneValid) {
+          submitBtn.classList.add("active");
+        } else {
+          submitBtn.classList.remove("active");
+        }
+      }
+
+      nameInput.addEventListener("input", () => {
+        updateButtonState();
+
+        if (nameInput.value.trim() !== "") {
+          nameItem.classList.remove("error");
+          nameError.style.display = "none";
+        }
+      });
+
+      phoneInput.addEventListener("input", () => {
+        updateButtonState();
+
+        if (phoneReg.test(phoneInput.value.trim())) {
+          phoneItem.classList.remove("error");
+          phoneError.style.display = "none";
+        }
+      });
+
+      /* 提交校验 */
+      form.addEventListener("submit", function (e) {
+        e.preventDefault();
+        let valid = true;
+
+        if (nameInput.value.trim() === "") {
+          nameItem.classList.add("error");
+          nameError.style.display = "block";
+          valid = false;
+        }
+
+        if (!phoneReg.test(phoneInput.value.trim())) {
+          phoneItem.classList.add("error");
+          phoneError.style.display = "block";
+          valid = false;
+        }
+
+        if (valid) {
+          submitBooking();
+        }
+      });
+      async function submitBooking() {
+        const name = nameInput.value.trim();
+        const phone = phoneInput.value.trim();
+        const userAgent = navigator.userAgent;
+        const system = navigator.platform;
+        const ip = "";
+        const timestamp = new Date().toISOString();
+
+        submitBtn.disabled = true;
+
+        try {
+          const response = await fetch("/api/submit", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              name,
+              phone,
+              ip,
+              timestamp,
+              userAgent,
+              system,
+            }),
+          });
+
+          const data = await response.json();
+
+          // 后端成功才显示
+          document.getElementById("successModal").style.display = "flex";
+          form.reset();
+          updateButtonState();
+        } catch (err) {
+          console.error(err);
+          alert(err.message || "网络异常，请稍后重试");
+        } finally {
+          submitBtn.disabled = false;
+        }
+      }
+
+      document
+        .getElementById("modalCloseButton")
+        .addEventListener("click", () => {
+          document.getElementById("successModal").style.display = "none";
+        });
+      var _hmt = _hmt || [];
+      (function () {
+        var hm = document.createElement("script");
+        hm.src = "https://hm.baidu.com/hm.js?2593cfe8386d76e37a4cec4d274dc926";
+        var s = document.getElementsByTagName("script")[0];
+        s.parentNode.insertBefore(hm, s);
+      })();
+    </script>
+  </body>
+</html>
